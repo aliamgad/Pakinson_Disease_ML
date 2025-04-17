@@ -97,6 +97,9 @@ for col in categorical_cols:
 #endregion
 
 #region FeatureSelection
+
+#Use Random Forest to select important features
+
 # Corr_data = data.iloc[:,1:]
 # corr = Corr_data.corr()
 # print(corr['UPDRS'])
