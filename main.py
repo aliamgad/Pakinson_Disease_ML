@@ -8,6 +8,8 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import cross_val_score
 from sklearn import preprocessing
 import ast
+import seaborn as sns
+
 data = pd.read_csv('parkinsons_disease_data_reg.csv')
 
 
@@ -60,6 +62,18 @@ data = pd.concat([data.drop(columns=['MedicalHistory', 'Symptoms']),
 #endregion
 
 #region Normalization and Feature Encoding
+'''Tansform WeeklyPhysicalActivity (hr) into Minutes'''
+def hour_to_minutes(time):
+
+    split = str(time).split(':')
+    hour = int(split[0])
+    minute= int(split[1])
+    
+    return hour*60 + minute
+
+data["WeeklyPhysicalActivity (hr)"] = data["WeeklyPhysicalActivity (hr)"].apply(hour_to_minutes)
+
+
 
 '''Normalization'''
 Numerical_cols = data.select_dtypes(exclude='object').columns #select  only the colums with type =='object'
@@ -72,7 +86,6 @@ data[Numerical_cols] = scaler.fit_transform(data[Numerical_cols])
 
 '''Encoding categorical features'''
 categorical_cols = data.select_dtypes(include='object').columns #select  only the colums with type =='object'
-categorical_cols = categorical_cols.drop(["WeeklyPhysicalActivity (hr)"])
 # label_encoders = {}
 for col in categorical_cols:
     le = preprocessing.LabelEncoder()
@@ -81,7 +94,16 @@ for col in categorical_cols:
     # label_encoders[col] = le #save for later (transform encoded values back to object)
     # print("After")
     # print(data[col].astype(str).unique())
+#endregion
 
+#region FeatureSelection
+# Corr_data = data.iloc[:,1:]
+# corr = Corr_data.corr()
+# print(corr['UPDRS'])
+
+# plt.subplots(figsize=(12, 8))
+# sns.heatmap(corr, annot=True)
+# plt.show()
 #endregion
 
 target_feature = data['UPDRS']
