@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import stats
 from sklearn import linear_model
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
@@ -9,6 +10,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn import preprocessing
 import ast
 import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor
 
 data = pd.read_csv('parkinsons_disease_data_reg.csv')
 
@@ -87,6 +89,7 @@ data[Numerical_cols] = scaler.fit_transform(data[Numerical_cols])
 '''Encoding categorical features'''
 categorical_cols = data.select_dtypes(include='object').columns #select  only the colums with type =='object'
 # label_encoders = {}
+
 for col in categorical_cols:
     le = preprocessing.LabelEncoder()
     # print(data[col].astype(str).unique())
@@ -98,15 +101,62 @@ for col in categorical_cols:
 
 #region FeatureSelection
 
-#Use Random Forest to select important features
+# # Pearson Correlation
+# Corr_Numerical_data = data[Numerical_cols]
+# corr = Corr_Numerical_data.corr()
+# print("Correlation matrix:")
+# print(abs(corr['UPDRS']).sort_values(ascending=False))
+# # print(corr['UPDRS'])
 
-# Corr_data = data.iloc[:,1:]
-# corr = Corr_data.corr()
-# print(corr['UPDRS'])
+# # plt.subplots(figsize=(12, 8))
+# # sns.heatmap(corr, annot=True)
+# # plt.show()
 
-# plt.subplots(figsize=(12, 8))
-# sns.heatmap(corr, annot=True)
+# Anova Correlation
+three_value_cols = ['Ethnicity','EducationLevel']
+
+for col in three_value_cols:
+    f_stat, p_value = stats.f_oneway(data[data[col] == 0]['UPDRS'], data[data[col] == 1]['UPDRS'])
+    # print(f"ANOVA for {col}: F-statistic = {f_stat}, p-value = {p_value}")
+    if p_value < 0.05:
+        print(f"Feature {col} is significant (p < 0.05)")
+    # else:
+    #     print(f"Feature {col} is not significant (p >= 0.05)")
+
+
+# t-test correlation
+binary_categorical_cols = [col for col in categorical_cols if data[col].nunique() == 2]
+
+for col in binary_categorical_cols:
+    group1 = data[data[col] == 0]['UPDRS']
+    group2 = data[data[col] == 1]['UPDRS']
+    t_stat, p_value = stats.ttest_ind(group1, group2, nan_policy='omit')
+    # print(f"t-test for {col}: t-statistic = {t_stat}, p-value = {p_value}")
+    if p_value < 0.05:
+        print(f"Feature {col} is significant (p < 0.05)")
+    # else:
+    #     print(f"Feature {col} is not significant (p >= 0.05)")
+
+# #Use Random Forest to select important features
+
+# X = data.drop(columns=['UPDRS'])
+# y = data['UPDRS']
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# rf = RandomForestRegressor(n_estimators=100, random_state=42)
+# rf.fit(X_train, y_train)
+# importances = rf.feature_importances_
+# indices = np.argsort(importances)[::-1]
+# print("Feature ranking:")
+# for f in range(X.shape[1]):
+#     print(f"{f + 1}. feature {X.columns[indices[f]]} ({importances[indices[f]]})")
+
+# # Plot the feature importances of the forest
+# plt.figure()
+# plt.title("Feature importances")
+# plt.bar(range(X.shape[1]), importances[indices], align="center")
+# plt.xticks(range(X.shape[1]), X.columns[indices], rotation=90)
+# plt.xlim([-1, X.shape[1]])
 # plt.show()
-#endregion
 
-target_feature = data['UPDRS']
+#endregion
