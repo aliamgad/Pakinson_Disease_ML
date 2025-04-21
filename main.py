@@ -1,16 +1,18 @@
 import numpy as np
 import pandas as pd
+import collections
 import matplotlib.pyplot as plt
 from scipy import stats
 from sklearn import linear_model
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.model_selection import cross_val_score
 from sklearn import preprocessing
 import ast
 import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LinearRegression
 
 data = pd.read_csv('parkinsons_disease_data_reg.csv')
 
@@ -22,10 +24,8 @@ data = pd.read_csv('parkinsons_disease_data_reg.csv')
 # print(data.duplicated().sum())
 
 ''' No Outliers in the dataset '''
-# # Select only numerical columns
-# numerical_data = data.select_dtypes(include=[np.number])
+# numerical_data = data.select_dtypes(exclude='object')
 
-# # Function to detect outliers using IQR
 # def detect_outliers_iqr(data):
 #     Q1 = data.quantile(0.25)
 #     Q3 = data.quantile(0.75)
@@ -33,7 +33,6 @@ data = pd.read_csv('parkinsons_disease_data_reg.csv')
 #     outliers = ((data < (Q1 - 1.5 * IQR)) | (data > (Q3 + 1.5 * IQR)))
 #     return outliers.sum()
 
-# # Apply the function to each numerical column
 # outlier_counts = numerical_data.apply(detect_outliers_iqr)
 
 # outlier_counts.sort_values(ascending=False)
@@ -78,129 +77,122 @@ data["WeeklyPhysicalActivity (hr)"] = data["WeeklyPhysicalActivity (hr)"].apply(
 
 
 '''Normalization'''
-Numerical_cols = data.select_dtypes(exclude='object').columns #select  only the colums with type =='object'
+Numerical_cols = data.select_dtypes(exclude='object').columns
 Numerical_cols = Numerical_cols.drop(['PatientID'])
 
-# data = preprocessing.normalize(data[Numerical_cols], axis=0)
+
 scaler = preprocessing.MinMaxScaler()
 data[Numerical_cols] = scaler.fit_transform(data[Numerical_cols])
-# print(data[Numerical_cols].head())
 
 '''Encoding categorical features'''
-categorical_cols = data.select_dtypes(include='object').columns #select  only the colums with type =='object'
-# label_encoders = {}
+categorical_cols = data.select_dtypes(include='object').columns
 
 for col in categorical_cols:
     le = preprocessing.LabelEncoder()
-    # print(data[col].astype(str).unique())
     data[col] = le.fit_transform(data[col].astype(str))
-    # label_encoders[col] = le #save for later (transform encoded values back to object)
-    # print("After")
-    # print(data[col].astype(str).unique())
+
 #endregion
 
 #region FeatureSelection
 
-# # Pearson Correlation
-# Corr_Numerical_data = data[Numerical_cols]
-# corr = Corr_Numerical_data.corr()
-# print("Correlation matrix:")
-# print(abs(corr['UPDRS']).sort_values(ascending=False))
-# # print(corr['UPDRS'])
-
-# # plt.subplots(figsize=(12, 8))
-# # sns.heatmap(corr, annot=True)
-# # plt.show()
-
-# Anova Correlation
-three_value_cols = ['Ethnicity','EducationLevel']
-
-for col in three_value_cols:
-    f_stat, p_value = stats.f_oneway(data[data[col] == 0]['UPDRS'], data[data[col] == 1]['UPDRS'])
-    # print(f"ANOVA for {col}: F-statistic = {f_stat}, p-value = {p_value}")
-    if p_value < 0.05:
-        print(f"Feature {col} is significant (p < 0.05)")
-    # else:
-    #     print(f"Feature {col} is not significant (p >= 0.05)")
+#Numerical features
+'''Pearson Correlation'''
+Corr_Numerical_data = data[Numerical_cols]
+corr = Corr_Numerical_data.corr()
+top_feature_OF_Numericals = corr.index[abs(corr['UPDRS'])>0.03] # 0.02 can be used for correlation threshold
+#Correlation plot
+# plt.subplots(figsize=(12, 8))
+# top_corr = Corr_Numerical_data[top_feature_OF_Numericals].corr()
+# sns.heatmap(top_corr, annot=True)
+# plt.show()
+top_feature_OF_Numericals = top_feature_OF_Numericals.drop("UPDRS")
 
 
-# t-test correlation
-binary_categorical_cols = [col for col in categorical_cols if data[col].nunique() == 2]
+# # Plot the frequency of the correlation coefficients
+# abs_corr = abs(corr['UPDRS'].round(2))
+# abs_corr = abs_corr[abs_corr < 1]
+# freq = collections.Counter(abs_corr)
+# sorted_dict = dict(sorted(freq.items()))
+# plt.plot(list(sorted_dict.keys()), list(sorted_dict.values()), marker='o')
+# plt.xlabel('Correlation Coefficient (Rounded to 2)')
+# plt.ylabel('Frequency')
+# plt.title('Frequency of Correlation Coefficients')
+# plt.grid()
+# plt.show()
 
-for col in binary_categorical_cols:
-    group1 = data[data[col] == 0]['UPDRS']
-    group2 = data[data[col] == 1]['UPDRS']
-    t_stat, p_value = stats.ttest_ind(group1, group2, nan_policy='omit')
-    # print(f"t-test for {col}: t-statistic = {t_stat}, p-value = {p_value}")
-    if p_value < 0.05:
-        print(f"Feature {col} is significant (p < 0.05)")
-    # else:
-    #     print(f"Feature {col} is not significant (p >= 0.05)")
 
-##Use Random Forest to select important features
+#Categorical features
 
-X = data.drop(columns=['UPDRS'])
-y = data['UPDRS']
+significant_features = []
 
-#Split into train/test
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.20, random_state=31
-)
+for col in categorical_cols:
+    if len(data[col].unique()) >= 3:
+        '''Anova Correlation'''
+        groups = [data[data[col] == val]['UPDRS'] for val in data[col].unique()]
+        f_stat, p_value = stats.f_oneway(*groups)
+        if p_value < 0.05:
+            significant_features.append(col)
+    else:
+        '''t-test Correlation'''
+        group1 = data[data[col] == 0]['UPDRS']
+        group2 = data[data[col] == 1]['UPDRS']
+        t_stat, p_value = stats.ttest_ind(group1, group2, nan_policy='omit')
+        if p_value < 0.05:
+            significant_features.append(col)
 
-#Set up Random Forest and hyperparameter grid
-random_forest_model = RandomForestRegressor(random_state=17)
+'''Random Forest'''
 
-param_dictionary = {
-    'n_estimators': [100, 200, 500, 1000, 1500],
-    'max_depth': [None, 5, 10, 20, 30, 40, 50],
-    'min_samples_split': [2, 5, 10, 20, 50],
-    'min_samples_leaf': [1, 2, 4, 8, 16],
-    'max_features': [None, 'log2', 'sqrt', 0.5, 0.75]
-}
+X = data.drop(columns=['UPDRS', 'PatientID'])
+Y = data['UPDRS']
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-#Randomized search over the grid with 5‑fold CV
-rand_search = RandomizedSearchCV(
-    estimator=random_forest_model,
-    param_distributions=param_dictionary,
-    n_iter=50,
-    scoring='neg_mean_squared_error',
-    cv=5,
-    verbose=1,
-    random_state=31,
-    n_jobs=-1
-)
+rf = RandomForestRegressor(n_estimators=100, random_state=42)
+rf.fit(X_train, Y_train)
+importances = rf.feature_importances_
+indices = np.argsort(importances)[::-1]
 
-rand_search.fit(X_train, y_train)
+top_7_features = X.columns[indices[:7]]
 
-#print("Best hyperparameters:", rand_search.best_params_)
-best_random_forest_model = rand_search.best_estimator_
+'''Backward Elimination'''
+model = LinearRegression()
+num_features_to_select = 7 
+rfe = RFE(estimator=model, n_features_to_select=num_features_to_select)
+X_rfe = rfe.fit_transform(X, Y)
 
-#Extract feature importances from the best model
-importances = best_random_forest_model.feature_importances_
-indices     = np.argsort(importances)[::-1]           # sort indices by importance
+selected_features = X.columns[rfe.support_]
 
-#Compute cumulative sum and select until threshold
-cumulative_importance   = np.cumsum(importances[indices])
-threshold    = 0.85
-#Keep all features up to the first index where cumulative >= threshold
-cutoff_idx   = np.where(cumulative_importance >= threshold)[0][0]  
-selected_idx = indices[: cutoff_idx + 1]             
-
-#Map back to feature names
-selected_features = X.columns[selected_idx].tolist()
-#print(f"Features selected (cumulative ≥ {threshold*100:.0f}%):")
-#for feat in selected_features:
-#    print(f"  • {feat}")
-
-X_train_selected = X_train.iloc[:, selected_idx]
-X_test_selected  = X_test.iloc[:, selected_idx]
 #endregion
 
+#Trainig and Testing Models
 
-#Retrain final model on selected features 
-final_random_forest_model = RandomForestRegressor(**rand_search.best_params_, random_state=31, n_jobs=-1)
-final_random_forest_model.fit(X_train_selected, y_train)
+top_feature=top_7_features.union(top_feature_OF_Numericals).union(selected_features).union(significant_features)
 
-# Evaluate the final model on X_test_sel, y_test as usual
-mse = metrics.mean_squared_error(y_test, final_random_forest_model.predict(X_test_selected))
-print(f"Final Test MSE: {mse:.4f}")
+X = X[top_feature]
+Y = data['UPDRS']
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+
+def model_trial(X_train, X_test, y_train, y_test, model, degree=2):
+    poly_features = PolynomialFeatures(degree=degree)
+    X_train_poly = poly_features.fit_transform(X_train)
+
+    model.fit(X_train_poly, y_train)
+
+    y_train_predicted = model.predict(X_train_poly)
+    prediction = model.predict(poly_features.fit_transform(X_test))
+
+    train_err = metrics.mean_squared_error(y_train, y_train_predicted)
+    test_err = metrics.mean_squared_error(y_test, prediction)
+    print('Train subset (MSE) for degree {}: '.format(degree), round(train_err, 4))
+    print('Test subset (MSE) for degree {}: '.format(degree), round(test_err, 4))
+    
+    
+
+print("Polynomial Regression")
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression())
+print("Ridge Regression")
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge())
+print("Lasso Regression")
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso())
+
+#endregion
