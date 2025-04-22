@@ -79,10 +79,9 @@ data["WeeklyPhysicalActivity (hr)"] = data["WeeklyPhysicalActivity (hr)"].apply(
 Numerical_cols = data.select_dtypes(exclude='object').columns
 Numerical_cols = Numerical_cols.drop(['PatientID'])
 
-
-# scaler = preprocessing.MinMaxScaler()
-# data[Numerical_cols] = scaler.fit_transform(data[Numerical_cols])
-
+# must be normalized because the lasso and rigid regression are sensitive to the scale of the features
+scaler = preprocessing.MinMaxScaler()
+data[Numerical_cols] = scaler.fit_transform(data[Numerical_cols])
 '''Encoding categorical features'''
 categorical_cols = data.select_dtypes(include='object').columns
 
@@ -147,23 +146,23 @@ X = data.drop(columns=['UPDRS', 'PatientID'])
 Y = data['UPDRS']
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-# estimator = [10,20,30,40,50,60,70,80,90,100] # 60 is the best one
-# list_estimator = []
-# for i in estimator:
-#     rf = RandomForestRegressor(n_estimators=i, random_state=42)
-#     rf.fit(X_train, Y_train)
-#     prediction = rf.predict(X_test)
-#     train_err = metrics.mean_squared_error(Y_train, rf.predict(X_train))
-#     test_err = metrics.mean_squared_error(Y_test, prediction)
-#     print('Train subset (MSE) for n_estimators {}: '.format(i), round(train_err, 4))
-#     print('Test subset (MSE) for n_estimators {}: '.format(i), round(test_err, 4))
-#     list_estimator.append((test_err-train_err))
+estimator = [10,20,30,40,50,60,70,80,90,100] # 60 is the best one
+list_estimator = []
+for i in estimator:
+    rf = RandomForestRegressor(n_estimators=i, random_state=42)
+    rf.fit(X_train, Y_train)
+    prediction = rf.predict(X_test)
+    train_err = metrics.mean_squared_error(Y_train, rf.predict(X_train))
+    test_err = metrics.mean_squared_error(Y_test, prediction)
+    print('Train subset (MSE) for n_estimators {}: '.format(i), round(train_err, 4))
+    print('Test subset (MSE) for n_estimators {}: '.format(i), round(test_err, 4))
+    list_estimator.append((test_err-train_err))
 
-# best_estimator = estimator[list_estimator.index(min(list_estimator))]
-# print("Best Estimator: ", best_estimator)
+best_estimator = estimator[list_estimator.index(min(list_estimator))]
+print("Best Estimator: ", best_estimator)
 
-# rf = RandomForestRegressor(n_estimators=best_estimator, random_state=42)
-rf = RandomForestRegressor(n_estimators=60, random_state=42)
+rf = RandomForestRegressor(n_estimators=best_estimator, random_state=42)
+# rf = RandomForestRegressor(n_estimators=60, random_state=42)
 rf.fit(X_train, Y_train)
 importances = rf.feature_importances_
 indices = np.argsort(importances)[::-1]
@@ -188,66 +187,80 @@ X = X[top_feature]
 Y = data['UPDRS']
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+diffrence_error = []
+def plot_prediction(y_actual, y_predicted, title, color, label):
+    plt.figure(figsize=(10, 6))
+    plt.scatter(y_actual, y_predicted, color=color, label=label)
+    plt.plot([y_actual.min(), y_actual.max()],
+             [y_actual.min(), y_actual.max()],
+             color='green', linestyle='--', label='Prediction Line')
+    plt.xlabel('Actual UPDRS')
+    plt.ylabel('Predicted UPDRS')
+    plt.title(title)
+    plt.legend()
+    plt.grid()
+    plt.show()
 
-def model_trial(X_train, X_test, y_train, y_test, model, degree=2):
+def train_and_evaluate(X_train, X_test, y_train, y_test, model, degree=3):
     poly_features = PolynomialFeatures(degree=degree)
     X_train_poly = poly_features.fit_transform(X_train)
 
     model.fit(X_train_poly, y_train)
 
     y_train_predicted = model.predict(X_train_poly)
-    prediction = model.predict(poly_features.fit_transform(X_test))
+    y_test_predicted = model.predict(poly_features.fit_transform(X_test))
 
     train_err = metrics.mean_squared_error(y_train, y_train_predicted)
-    test_err = metrics.mean_squared_error(y_test, prediction)
+    test_err = metrics.mean_squared_error(y_test, y_test_predicted)
+
     print('Train subset (MSE) for degree {}: '.format(degree), round(train_err, 4))
     print('Test subset (MSE) for degree {}: '.format(degree), round(test_err, 4))
+    diffrence_error.append((test_err-train_err))
+    return y_train_predicted, y_test_predicted
 
-    # Plotting the prediction line for train data
-    plt.figure(figsize=(10, 6))
-    plt.scatter(y_train, y_train_predicted, color='blue', label='Train Data')
-    plt.plot([y_train.min(), y_train.max()],
-             [y_train.min(), y_train.max()],
-             color='green', linestyle='--', label='Prediction Line')
-    plt.xlabel('Actual UPDRS')
-    plt.ylabel('Predicted UPDRS')
-    plt.title(f'Train Data: Prediction vs Actual (Degree {degree})')
-    plt.legend()
-    plt.grid()
-    plt.show()
+def model_trial(X_train, X_test, y_train, y_test, model,name, degree=3):
+    y_train_predicted, y_test_predicted = train_and_evaluate(X_train, X_test, y_train, y_test, model, degree)
 
-    # Plotting the prediction line for test data
-    plt.figure(figsize=(10, 6))
-    plt.scatter(y_test, prediction, color='red', label='Test Data')
-    plt.plot([y_test.min(), y_test.max()],
-             [y_test.min(), y_test.max()],
-             color='green', linestyle='--', label='Prediction Line')
-    plt.xlabel('Actual UPDRS')
-    plt.ylabel('Predicted UPDRS')
-    plt.title(f'Test Data: Prediction vs Actual (Degree {degree})')
-    plt.legend()
-    plt.grid()
-    plt.show()
+    plot_prediction(y_train, y_train_predicted, f'Train Data: Prediction vs Actual in Model {name} (Degree {degree})', 'blue', 'Train Data')
+    plot_prediction(y_test, y_test_predicted, f'Test Data: Prediction vs Actual in Model {name} (Degree {degree})', 'red', 'Test Data')
     
 
-# degree = [1, 2, 3, 4, 5]
-# for i in degree:
-#     print("Degree: ", i)
+degree = [1, 2, 3, 4, 5]
 
-#     print("Polynomial Regression")
-#     model_trial(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression(), i)
-#     print("Ridge Regression")
-#     model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge(), i)
-#     print("Lasso Regression")
-#     model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso(), i)
-#     print('---------------------------------------------------------')
+for i in degree:
+    print('---------------------------------------------------------')
+    print("Degree: ", i)
+    print("Polynomial Regression")
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression(), i)
+    print("Ridge Regression")
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Ridge(), i)
+    print("Lasso Regression")
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(), i)
+    print('---------------------------------------------------------')
+    
+best_degree = degree[diffrence_error.index(min(diffrence_error))]
+print("Best Degree: ", best_degree)
+diffrence_error = []
+alpha = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1]
+
+for i in alpha:
+    print('*******************************************************************')
+    print("Alpha: ", i)
+    print("Ridge Regression")
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=i), best_degree)
+    print("Lasso Regression")
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=i), best_degree)
+    print('*******************************************************************')
+best_alpha = alpha[diffrence_error.index(min(diffrence_error))]
+print("Best Alpha: ", best_alpha)
+print("Best Degree: ", best_degree)
 
 print("Polynomial Regression")
-model_trial(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression())
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression(),"Polynomial Regression", best_degree)
 print("Ridge Regression")
-model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge())
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=best_alpha),"Rigide Regression", best_degree)
 print("Lasso Regression")
-model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso())
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=best_alpha),"Lasso Regression", best_degree)
 
 
 #endregion
