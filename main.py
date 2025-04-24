@@ -84,7 +84,7 @@ scaler = preprocessing.MinMaxScaler()
 data[Numerical_cols] = scaler.fit_transform(data[Numerical_cols])
 '''Encoding categorical features'''
 categorical_cols = data.select_dtypes(include='object').columns
-
+categorical_cols = categorical_cols.drop(['DoctorInCharge'])
 for col in categorical_cols:
     le = preprocessing.LabelEncoder()
     data[col] = le.fit_transform(data[col].astype(str))
@@ -142,7 +142,7 @@ for col in categorical_cols:
 
 '''Random Forest'''
 
-X = data.drop(columns=['UPDRS', 'PatientID'])
+X = data.drop(columns=['UPDRS', 'PatientID', 'DoctorInCharge'])
 Y = data['UPDRS']
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
@@ -154,13 +154,13 @@ for i in estimator:
     prediction = rf.predict(X_test)
     train_err = metrics.mean_squared_error(Y_train, rf.predict(X_train))
     test_err = metrics.mean_squared_error(Y_test, prediction)
-    print('Train subset (MSE) for n_estimators {}: '.format(i), round(train_err, 4))
-    print('Test subset (MSE) for n_estimators {}: '.format(i), round(test_err, 4))
-    list_estimator.append((test_err-train_err))
+    print('Train error (MSE) for n_estimators {}: '.format(i), round(train_err, 4))
+    print('Test error (MSE) for n_estimators {}: '.format(i), round(test_err, 4))
+    list_estimator.append(abs(test_err-train_err))
 
 best_estimator = estimator[list_estimator.index(min(list_estimator))]
 print("Best Estimator: ", best_estimator)
-
+print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
 rf = RandomForestRegressor(n_estimators=best_estimator, random_state=42)
 # rf = RandomForestRegressor(n_estimators=60, random_state=42)
 rf.fit(X_train, Y_train)
@@ -188,6 +188,7 @@ Y = data['UPDRS']
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 diffrence_error = []
+model_performance = []
 def plot_prediction(y_actual, y_predicted, title, color, label):
     plt.figure(figsize=(10, 6))
     plt.scatter(y_actual, y_predicted, color=color, label=label)
@@ -201,7 +202,7 @@ def plot_prediction(y_actual, y_predicted, title, color, label):
     plt.grid()
     plt.show()
 
-def train_and_evaluate(X_train, X_test, y_train, y_test, model, degree=3):
+def train_and_evaluate(X_train, X_test, y_train, y_test, model, degree=3, alpha=None):
     poly_features = PolynomialFeatures(degree=degree)
     X_train_poly = poly_features.fit_transform(X_train)
 
@@ -213,23 +214,33 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, model, degree=3):
     train_err = metrics.mean_squared_error(y_train, y_train_predicted)
     test_err = metrics.mean_squared_error(y_test, y_test_predicted)
 
-    print('Train subset (MSE) for degree {}: '.format(degree), round(train_err, 4))
-    print('Test subset (MSE) for degree {}: '.format(degree), round(test_err, 4))
-    diffrence_error.append((test_err-train_err))
+    print(f'Train error (MSE) for degree {degree}: {round(train_err, 4)}')
+    print(f'Test error (MSE) for degree {degree}: {round(test_err, 4)}')
+    
+    model_performance.append({
+        'model_name': model.__class__.__name__,
+        'degree': degree,
+        'alpha': alpha,
+        'train_mse': train_err,
+        'test_mse': test_err,
+        'error_diff': test_err - train_err
+    })
+
     return y_train_predicted, y_test_predicted
 
-def model_trial(X_train, X_test, y_train, y_test, model,name, degree=3):
-    y_train_predicted, y_test_predicted = train_and_evaluate(X_train, X_test, y_train, y_test, model, degree)
+def model_trial(X_train, X_test, y_train, y_test, model,degree=3, alpha=None):
+    y_train_predicted, y_test_predicted = train_and_evaluate(X_train, X_test, y_train, y_test, model, degree, alpha)
 
-    plot_prediction(y_train, y_train_predicted, f'Train Data: Prediction vs Actual in Model {name} (Degree {degree})', 'blue', 'Train Data')
-    plot_prediction(y_test, y_test_predicted, f'Test Data: Prediction vs Actual in Model {name} (Degree {degree})', 'red', 'Test Data')
-    
+    plot_prediction(y_train, y_train_predicted, f'Train Data: Prediction vs Actual in Model {model.__class__.__name__} (Degree {degree})', 'blue', 'Train Data')
+    plot_prediction(y_test, y_test_predicted, f'Test Data: Prediction vs Actual in Model {model.__class__.__name__} (Degree {degree})', 'red', 'Test Data')
+
+#Reset the model performance for the next trial
+model_performance = []
 
 degree = [1, 2, 3, 4, 5]
-
 for i in degree:
     print('---------------------------------------------------------')
-    print("Degree: ", i)
+    print(f"Degree: {i}")
     print("Polynomial Regression")
     train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression(), i)
     print("Ridge Regression")
@@ -237,30 +248,43 @@ for i in degree:
     print("Lasso Regression")
     train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(), i)
     print('---------------------------------------------------------')
-    
-best_degree = degree[diffrence_error.index(min(diffrence_error))]
-print("Best Degree: ", best_degree)
-diffrence_error = []
-alpha = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1]
 
+best_degree_model = min(model_performance, key=lambda x: abs(x['error_diff']))
+best_degree = best_degree_model['degree']
+print(f"Best Degree: {best_degree}")
+
+# Reset the model performance for the next trial
+model_performance = []
+
+alpha = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 for i in alpha:
     print('*******************************************************************')
-    print("Alpha: ", i)
+    print(f"Alpha: {i}")
     print("Ridge Regression")
-    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=i), best_degree)
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=i), best_degree, i)
     print("Lasso Regression")
-    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=i), best_degree)
+    train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=i), best_degree, i)
     print('*******************************************************************')
-best_alpha = alpha[diffrence_error.index(min(diffrence_error))]
-print("Best Alpha: ", best_alpha)
-print("Best Degree: ", best_degree)
+
+best_alpha_model = min(model_performance, key=lambda x: abs(x['error_diff']))
+best_alpha = best_alpha_model['alpha']
+print(f"Best Alpha (based on smallest train-test MSE difference): {best_alpha}")
+
+# Reset the model performance for the final results
+model_performance = []
 
 print("Polynomial Regression")
-model_trial(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression(),"Polynomial Regression", best_degree)
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.LinearRegression() ,best_degree)
 print("Ridge Regression")
-model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=best_alpha),"Rigide Regression", best_degree)
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=best_alpha),best_degree, best_alpha)
 print("Lasso Regression")
-model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=best_alpha),"Lasso Regression", best_degree)
+model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=best_alpha), best_degree, best_alpha)
 
-
-#endregion
+best_model = min(model_performance, key=lambda x: abs(x['error_diff']))
+print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+print("Best Model Details:")
+print(f"Model: {best_model['model_name']}")
+print(f"Degree: {best_model['degree']}")
+print(f"Alpha: {best_model['alpha']}")
+print(f"Train MSE: {round(best_model['train_mse'], 4)}")
+print(f"Test MSE: {round(best_model['test_mse'], 4)}")
