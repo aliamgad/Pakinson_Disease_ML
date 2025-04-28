@@ -214,8 +214,8 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, model, degree=3, alpha=
     train_err = metrics.mean_squared_error(y_train, y_train_predicted)
     test_err = metrics.mean_squared_error(y_test, y_test_predicted)
 
-    print(f'Train error (MSE) for degree {degree}: {round(train_err, 4)}')
-    print(f'Test error (MSE) for degree {degree}: {round(test_err, 4)}')
+    print(f'Train error (MSE) : {round(train_err, 4)}')
+    print(f'Test error (MSE) : {round(test_err, 4)}')
     
     model_performance.append({
         'model_name': model.__class__.__name__,
@@ -223,16 +223,21 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, model, degree=3, alpha=
         'alpha': alpha,
         'train_mse': train_err,
         'test_mse': test_err,
-        'error_diff': test_err - train_err
+        'error_diff': test_err - train_err,
+        'R2_train': metrics.r2_score(y_train, y_train_predicted),
+        'R2_test': metrics.r2_score(y_test, y_test_predicted)
     })
 
     return y_train_predicted, y_test_predicted
 
 def model_trial(X_train, X_test, y_train, y_test, model,degree=3, alpha=None):
     y_train_predicted, y_test_predicted = train_and_evaluate(X_train, X_test, y_train, y_test, model, degree, alpha)
+    
+    print("Train R^2 score: ", round(metrics.r2_score(y_train, y_train_predicted), 4))
+    print("Test R^2 score: ", round(metrics.r2_score(y_test, y_test_predicted), 4))
 
-    plot_prediction(y_train, y_train_predicted, f'Train Data: Prediction vs Actual in Model {model.__class__.__name__} (Degree {degree})', 'blue', 'Train Data')
-    plot_prediction(y_test, y_test_predicted, f'Test Data: Prediction vs Actual in Model {model.__class__.__name__} (Degree {degree})', 'red', 'Test Data')
+    plot_prediction(y_train, y_train_predicted, f'Train Data: Prediction vs Actual in Model {model.__class__.__name__} (Degree {degree} & Alpha {alpha})', 'blue', 'Train Data')
+    plot_prediction(y_test, y_test_predicted, f'Test Data: Prediction vs Actual in Model {model.__class__.__name__} (Degree {degree} & Alpha {alpha})', 'red', 'Test Data')
 
 #Reset the model performance for the next trial
 model_performance = []
@@ -249,7 +254,7 @@ for i in degree:
     train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(), i)
     print('---------------------------------------------------------')
 
-best_degree_model = min(model_performance, key=lambda x: abs(x['error_diff']))
+best_degree_model = min(model_performance, key=lambda x:x['test_mse'])
 best_degree = best_degree_model['degree']
 print(f"Best Degree: {best_degree}")
 
@@ -266,7 +271,7 @@ for i in alpha:
     train_and_evaluate(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=i), best_degree, i)
     print('*******************************************************************')
 
-best_alpha_model = min(model_performance, key=lambda x: abs(x['error_diff']))
+best_alpha_model = min(model_performance, key=lambda x: x['test_mse'])
 best_alpha = best_alpha_model['alpha']
 print(f"Best Alpha (based on smallest train-test MSE difference): {best_alpha}")
 
@@ -280,11 +285,15 @@ model_trial(X_train, X_test, Y_train, Y_test, linear_model.Ridge(alpha=best_alph
 print("Lasso Regression")
 model_trial(X_train, X_test, Y_train, Y_test, linear_model.Lasso(alpha=best_alpha), best_degree, best_alpha)
 
-best_model = min(model_performance, key=lambda x: abs(x['error_diff']))
+best_model = min(model_performance, key=lambda x: x['test_mse'])
 print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-print("Best Model Details:")
+print("Best Model with least test MSE:")
 print(f"Model: {best_model['model_name']}")
 print(f"Degree: {best_model['degree']}")
 print(f"Alpha: {best_model['alpha']}")
 print(f"Train MSE: {round(best_model['train_mse'], 4)}")
 print(f"Test MSE: {round(best_model['test_mse'], 4)}")
+print(f"Train R^2: {round(best_model['R2_train'], 4)}")
+print(f"Test R^2: {round(best_model['R2_test'], 4)}")
+
+# endregion
