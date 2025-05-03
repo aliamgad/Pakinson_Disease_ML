@@ -1,0 +1,10 @@
+PatientID
+Age
+UPDRS
+MoCA
+FunctionalAssessment
+DietQuality
+SleepQuality
+SystolicBP
+DiastolicBP
+CholesterolTotal
