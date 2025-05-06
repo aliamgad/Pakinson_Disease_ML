@@ -4,9 +4,9 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier, StackingClassifier
 from sklearn.svm import SVC
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder, StandardScaler, OrdinalEncoder
 from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectKBest, chi2, f_classif
+from sklearn.feature_selection import SelectKBest, chi2, f_classif, VarianceThreshold
 import pickle
 import time
 from sklearn.metrics import accuracy_score
@@ -14,12 +14,15 @@ import matplotlib.pyplot as plt
 import os
 
 # Load dataset (assuming file name based on project context)
-data = pd.read_csv('parkinsons_disease_data_cls.csv')
+# data = pd.read_csv('parkinsons_disease_data_cls.csv')
 
 # Check if train.csv and test.csv exist, use them if available
 # if os.path.exists('train.csv') and os.path.exists('test.csv'):
+
 train_data = pd.read_csv('train.csv')
 test_data = pd.read_csv('test.csv')
+
+
 # else:
 #     # Split dataset into train and test (80% train, 20% test)
 #     train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
@@ -36,42 +39,21 @@ def parse_nested(data, column):
 
 
 # Apply parse_nested to the entire dataset before splitting
-data = pd.concat([data.drop(['MedicalHistory', 'Symptoms'], axis=1),
-                  parse_nested(data, 'MedicalHistory').add_prefix('MedHist_'),
-                  parse_nested(data, 'Symptoms').add_prefix('Symptom_')], axis=1)
+train_data = pd.concat([train_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
+                        parse_nested(train_data, 'MedicalHistory').add_prefix('MedHist_'),
+                        parse_nested(train_data, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
-# Fit LabelEncoders on the entire dataset to capture all possible values
-categorical_cols = data.drop(columns=['Diagnosis', 'DoctorInCharge']).select_dtypes(include=['object']).columns
-label_encoders = {}
-for col in categorical_cols:
-    encoder_file = f'label_encoder_{col}.pkl'
-    # if os.path.exists(encoder_file):
-    #     with open(encoder_file, 'rb') as f:
-    #         le = pickle.load(f)
-    #     print(f"Loaded LabelEncoder for {col} from {encoder_file}")
-    # else:
-    le = LabelEncoder()
-    # Fit on all unique values, including 'missing'
-    unique_values = data[col].fillna('missing').unique()
-    le.fit(unique_values)
-    with open(encoder_file, 'wb') as f:
-        pickle.dump(le, f)
-    print(f"Saved LabelEncoder for {col} to {encoder_file}")
-    label_encoders[col] = le
+categorical_cols = train_data.drop(columns=['Diagnosis', 'DoctorInCharge']).select_dtypes(include=['object']).columns
+ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+train_data[categorical_cols] = train_data[categorical_cols].fillna('missing')
+train_data[categorical_cols] = ordinal_encoder.fit_transform(train_data[categorical_cols])
 
-# Now apply the encoding to the training data
-X = train_data.drop(columns=['Diagnosis', 'DoctorInCharge'])  # Drop confidential and target
+with open("ordinal_encoder.pkl", "wb") as f:
+    pickle.dump(ordinal_encoder, f)
+
+X = train_data.drop(columns=['Diagnosis', 'DoctorInCharge'])
 y = train_data['Diagnosis']
 
-# Reapply parse_nested to ensure consistency (already done on data, but reapply to X for clarity)
-X = pd.concat([X.drop(['MedicalHistory', 'Symptoms'], axis=1),
-               parse_nested(X, 'MedicalHistory').add_prefix('MedHist_'),
-               parse_nested(X, 'Symptoms').add_prefix('Symptom_')], axis=1)
-
-# Encode categorical variables using the fitted LabelEncoders
-for col in categorical_cols:
-    le = label_encoders[col]
-    X[col] = le.transform(X[col].fillna('missing'))
 
 # Feature Selection
 # Check if selected features file exists
@@ -79,8 +61,11 @@ for col in categorical_cols:
 #     with open('selected_features.txt', 'r') as f:
 #         selected_features = f.read().splitlines()
 #     print("Loaded selected features from file:", selected_features)
-# else:
+# else: (apply the selection)
+
+
 # Separate numerical and categorical features
+
 numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns
 # Use dummy variables for categorical columns to ensure non-negative binary data
 categorical_cols = X.columns[X.columns.str.contains('MedHist_|Symptom_')]
@@ -99,67 +84,69 @@ y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)  # Replace NaN/inf with 0
 # print("y NaN check:", np.isnan(y).sum())
 
 # Numerical features: Use Pearson's correlation (f_classif in sklearn)
-selector_num = SelectKBest(score_func=f_classif, k=5)  # Select top 5 numerical features
-X_num_selected = selector_num.fit_transform(X[numerical_cols], y)
+# Step 1: Remove constant features (zero variance)
+variance_selector = VarianceThreshold(threshold=0.0)
+X_var_filtered = variance_selector.fit_transform(X[numerical_cols])
+filtered_numerical_cols = [
+    col for col, keep in zip(list(numerical_cols), variance_selector.get_support()) if keep
+]
+
+# Pearson correlation
+selector_num = SelectKBest(score_func=f_classif, k=5)
+X_num_selected = selector_num.fit_transform(X_var_filtered, y)
 selected_num_indices = selector_num.get_support(indices=True)
-selected_num_features = numerical_cols[selected_num_indices].tolist()
+selected_num_features = [filtered_numerical_cols[i] for i in selected_num_indices]
+
 print("Selected numerical features:", selected_num_features)
 
 # Categorical features: Use Chi-Squared test
 selector_cat = SelectKBest(score_func=chi2, k=5)  # Select top 5 categorical features
 X_cat_selected = selector_cat.fit_transform(X_cat, y)
 selected_cat_indices = selector_cat.get_support(indices=True)
-#selected_cat_features = X_cat.columns[selected_cat_indices].tolist()
 selected_cat_features = X_cat.columns[selected_cat_indices].tolist() if hasattr(X_cat, 'columns') else X.columns[
     selected_cat_indices].tolist()
 print("Selected categorical features:", selected_cat_features)
 
 # Combine selected features
 selected_features = selected_num_features + selected_cat_features
-
-# Save selected features to a text file
-with open('selected_features.txt', 'w') as f:
-    for feature in selected_features:
-        f.write(f"{feature}\n")
-print("Saved selected features to file:", selected_features)
-
-# Use selected features
 X_selected = X[selected_features]
+numerical_cols = X_selected.select_dtypes(include=['int64', 'float64'], exclude=['string']).columns
 
-# Scale numerical features and save/load scaler
-numerical_cols = X_selected.select_dtypes(include=['int64', 'float64']).columns
 # if os.path.exists('scaler.pkl'):
 #     with open('scaler.pkl', 'rb') as f:
 #         scaler = pickle.load(f)
 #     print("Loaded scaler from scaler.pkl")
-# else:
+# else: (make new scaler)
+
 scaler = StandardScaler()
 X_selected[numerical_cols] = scaler.fit_transform(X_selected[numerical_cols])
+
+# Save for test script
 with open('scaler.pkl', 'wb') as f:
     pickle.dump(scaler, f)
 print("Saved scaler to scaler.pkl")
-X_selected[numerical_cols] = X_selected[numerical_cols].astype(float)
-X_selected.loc[:, numerical_cols] = scaler.transform(X_selected[numerical_cols])
 
-# Save selected features as a pickle file for test script (for consistency)
-# if not os.path.exists('selected_features.pkl'):
-#     with open('selected_features.pkl', 'wb') as f:
-#         pickle.dump(selected_features, f)
-#     print("Saved selected features to selected_features.pkl")
-
-# Imputer for missing values and save/load imputer
-# if os.path.exists('imputer.pkl'):
-#     with open('imputer.pkl', 'rb') as f:
-#         imputer = pickle.load(f)
-#     print("Loaded imputer from imputer.pkl")
-# else:
+# # Imputer for missing values and save/load imputer
+# # if os.path.exists('imputer.pkl'):
+# #     with open('imputer.pkl', 'rb') as f:
+# #         imputer = pickle.load(f)
+# #     print("Loaded imputer from imputer.pkl")
+# # else:
 
 imputer = SimpleImputer(strategy='mean')
-numerical_cols = imputer.fit_transform(numerical_cols)
+X_selected[numerical_cols] = imputer.fit_transform(X_selected[numerical_cols])
+
+# Save for test script
 with open('imputer.pkl', 'wb') as f:
     pickle.dump(imputer, f)
 print("Saved imputer to imputer.pkl")
-numerical_cols = imputer.transform(numerical_cols)  # Ensure consistent imputation
+
+
+# Save for test script
+if not os.path.exists('selected_features.pkl'):
+    with open('selected_features.pkl', 'wb') as f:
+        pickle.dump(selected_features, f)
+    print("Saved selected features to selected_features.pkl")
 
 # Define models and hyperparameter grids
 log_reg = LogisticRegression(max_iter=1000)

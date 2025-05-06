@@ -47,25 +47,20 @@ def predict_new_data(test_file):
                        parse_nested(X_new, 'MedicalHistory').add_prefix('MedHist_'),
                        parse_nested(X_new, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
-    # Encode categorical variables using saved LabelEncoders
-    categorical_cols = X_new.select_dtypes(include=['object']).columns
-    for col in categorical_cols:
-        with open(f'label_encoder_{col}.pkl', 'rb') as f:
-            le = pickle.load(f)
-        # Handle unseen labels by mapping to a default (e.g., 'missing')
-        X_new[col] = X_new[col].fillna('missing')
-        X_new[col] = X_new[col].map(lambda x: x if x in le.classes_ else 'missing')
-        X_new[col] = le.transform(X_new[col])
-
-    # Select only the features used during training
     X_new = X_new[selected_features]
 
-    # Scale numerical features using saved scaler
-    numerical_cols = X_new.select_dtypes(include=['int64', 'float64']).columns
-    X_new[numerical_cols] = scaler.transform(X_new[numerical_cols])
+    categorical_cols = X_new.select_dtypes(include=['object']).columns
+    if len(categorical_cols) > 0:
+        with open('ordinal_encoder.pkl', 'rb') as f:
+            ordinal_encoder = pickle.load(f)
+        X_new.loc[:, categorical_cols] = X_new[categorical_cols].fillna('missing')
+        X_new.loc[:, categorical_cols] = ordinal_encoder.transform(X_new[categorical_cols])
 
-    # Impute missing values using saved imputer
-    X_new = imputer.transform(X_new)
+    numerical_cols = X_new.select_dtypes(include=['int64', 'float64']).columns
+    if len(numerical_cols) > 0:
+        X_new.loc[:, numerical_cols] = imputer.transform(X_new[numerical_cols])
+        X_new[numerical_cols] = X_new[numerical_cols].astype('float64')
+        X_new.loc[:, numerical_cols] = scaler.transform(X_new[numerical_cols])
 
     # Make predictions and calculate detailed test metrics
     predictions = {}
