@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+   <html lang="en">
+   <head>
+       <meta charset="UTF-8">
+       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       <title>Parkinson's Disease Prediction</title>
+       <script src="https://cdn.tailwindcss.com"></script>
+       <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+   </head>
+   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
+       <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
+           <h1 class="text-2xl font-bold mb-6 text-center">Parkinson's Disease Prediction</h1>
+           <form id="prediction-form" class="space-y-4">
+               {% for feature in features %}
+                   <div>
+                       <label class="block text-sm font-medium text-gray-700">{{ feature }}</label>
+                       {% if feature in numerical_cols %}
+                           <input type="number" step="any" name="{{ feature }}"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                  required>
+                       {% elif feature in categorical_cols %}
+                           <input type="text" name="{{ feature }}"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                  required>
+                       {% elif feature in binary_cols %}
+                           <input type="checkbox" name="{{ feature }}"
+                                  class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                       {% endif %}
+                   </div>
+               {% endfor %}
+               <button type="submit"
+                       class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                   Predict
+               </button>
+           </form>
+           <div id="result" class="mt-6 p-4 bg-gray-50 rounded-md hidden">
+               <h2 class="text-lg font-semibold">Prediction Result</h2>
+               <p id="prediction" class="mt-2"></p>
+               <p id="probability" class="mt-2"></p>
+           </div>
+       </div>
+
+       <script>
+           $(document).ready(function() {
+               $('#prediction-form').submit(function(e) {
+                   e.preventDefault();
+                   $.ajax({
+                       url: '/predict',
+                       type: 'POST',
+                       data: $(this).serialize(),
+                       success: function(response) {
+                           $('#result').removeClass('hidden');
+                           $('#prediction').text('Prediction: ' + response.prediction);
+                           if (response.probability) {
+                               $('#probability').text('Probabilities: Negative - ' +
+                                   (response.probability[0] * 100).toFixed(2) + '%, Positive - ' +
+                                   (response.probability[1] * 100).toFixed(2) + '%');
+                           } else {
+                               $('#probability').text('');
+                           }
+                       },
+                       error: function(response) {
+                           $('#result').removeClass('hidden');
+                           $('#prediction').text('Error: ' + response.responseJSON.error);
+                           $('#probability').text('');
+                       }
+                   });
+               });
+           });
+       </script>
+   </body>
+   </html>
