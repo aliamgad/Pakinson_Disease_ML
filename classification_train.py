@@ -70,7 +70,7 @@ numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns
 # Use dummy variables for categorical columns to ensure non-negative binary data
 categorical_cols = X.columns[X.columns.str.contains('MedHist_|Symptom_')]
 X_cat = X[categorical_cols].copy()  # Create a copy to avoid SettingWithCopyWarning
-X_cat = X_cat.astype(float)  # Ensure float type for chi2
+Xesign = X_cat.astype(float)  # Ensure float type for chi2
 y = y.astype(float)  # Ensure y is numeric
 
 # Validate and clean data
@@ -133,7 +133,7 @@ print("Saved scaler to scaler.pkl")
 # #     print("Loaded imputer from imputer.pkl")
 # # else:
 
-imputer = SimpleImputer(strategy='mean')
+imputer = SimpleImputer(strategy='most_frequent')
 X_selected[numerical_cols] = imputer.fit_transform(X_selected[numerical_cols])
 
 # Save for test script
@@ -153,7 +153,11 @@ log_reg = LogisticRegression(max_iter=1000)
 rf = RandomForestClassifier()
 svm = SVC()
 
-param_grid_log = {'C': [0.1, 1, 10]}  # try another one
+param_grid_log = {
+    'C': [0.1, 1, 10],
+    'penalty': ['l1', 'l2'],
+    'solver': ['saga']
+}
 param_grid_rf = {'n_estimators': [50, 100, 200], 'max_depth': [None, 10, 20]}
 param_grid_svm = {'C': [0.1, 1, 10], 'kernel': ['rbf', 'linear']}
 
