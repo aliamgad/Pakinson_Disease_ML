@@ -17,15 +17,15 @@ import os
 data = pd.read_csv('parkinsons_disease_data_cls.csv')
 
 # Check if train.csv and test.csv exist, use them if available
-if os.path.exists('train.csv') and os.path.exists('test.csv'):
-    train_data = pd.read_csv('train.csv')
-    test_data = pd.read_csv('test.csv')
-else:
-    # Split dataset into train and test (80% train, 20% test)
-    train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
-    # Save the splits to CSV files
-    train_data.to_csv('train.csv', index=False)
-    test_data.to_csv('test.csv', index=False)
+# if os.path.exists('train.csv') and os.path.exists('test.csv'):
+train_data = pd.read_csv('train.csv')
+test_data = pd.read_csv('test.csv')
+# else:
+#     # Split dataset into train and test (80% train, 20% test)
+#     train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
+#     # Save the splits to CSV files
+#     train_data.to_csv('train.csv', index=False)
+#     test_data.to_csv('test.csv', index=False)
 
 
 # Preprocessing
@@ -93,10 +93,10 @@ X_cat = np.nan_to_num(X_cat, nan=0.0, posinf=0.0, neginf=0.0)  # Replace NaN/inf
 y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)  # Replace NaN/inf with 0
 
 # Debug: Print shapes and check for NaN
-print("X_cat shape:", X_cat.shape)
-print("y shape:", y.shape)
-print("X_cat NaN check:", np.isnan(X_cat).sum().sum())
-print("y NaN check:", np.isnan(y).sum())
+# print("X_cat shape:", X_cat.shape)
+# print("y shape:", y.shape)
+# print("X_cat NaN check:", np.isnan(X_cat).sum().sum())
+# print("y NaN check:", np.isnan(y).sum())
 
 # Numerical features: Use Pearson's correlation (f_classif in sklearn)
 selector_num = SelectKBest(score_func=f_classif, k=5)  # Select top 5 numerical features
@@ -153,19 +153,20 @@ X_selected.loc[:, numerical_cols] = scaler.transform(X_selected[numerical_cols])
 #         imputer = pickle.load(f)
 #     print("Loaded imputer from imputer.pkl")
 # else:
+
 imputer = SimpleImputer(strategy='mean')
-X_selected = imputer.fit_transform(X_selected)
+numerical_cols = imputer.fit_transform(numerical_cols)
 with open('imputer.pkl', 'wb') as f:
     pickle.dump(imputer, f)
 print("Saved imputer to imputer.pkl")
-X_selected = imputer.transform(X_selected)  # Ensure consistent imputation
+numerical_cols = imputer.transform(numerical_cols)  # Ensure consistent imputation
 
 # Define models and hyperparameter grids
 log_reg = LogisticRegression(max_iter=1000)
 rf = RandomForestClassifier()
 svm = SVC()
 
-param_grid_log = {'C': [0.1, 1, 10]}
+param_grid_log = {'C': [0.1, 1, 10]}  # try another one
 param_grid_rf = {'n_estimators': [50, 100, 200], 'max_depth': [None, 10, 20]}
 param_grid_svm = {'C': [0.1, 1, 10], 'kernel': ['rbf', 'linear']}
 
