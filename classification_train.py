@@ -46,7 +46,7 @@ train_data = pd.concat([train_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
 categorical_cols = train_data.drop(columns=['Diagnosis', 'DoctorInCharge']).select_dtypes(include=['object']).columns
 ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
 train_data[categorical_cols] = train_data[categorical_cols].fillna('missing')
-train_data[categorical_cols] = ordinal_encoder.fit_transform(train_data[categorical_cols])
+
 
 with open("ordinal_encoder.pkl", "wb") as f:
     pickle.dump(ordinal_encoder, f)
@@ -158,6 +158,8 @@ with open('imputer.pkl', 'wb') as f:
     pickle.dump({'imputers': imputers, 'imputed_values': imputed_values, 'numerical_cols': numerical_cols}, f)
 print("Saved imputers and imputed values to imputer.pkl")
 
+
+train_data[categorical_cols] = ordinal_encoder.fit_transform(train_data[categorical_cols])
 
 # Save for test script
 if not os.path.exists('selected_features.pkl'):
