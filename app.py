@@ -88,6 +88,9 @@ def predict():
         # Get form data
         input_data = request.form.to_dict()
 
+        print(input_data)
+        print(selected_features)
+
         # Create a DataFrame with selected features
         data = {feature: [0] for feature in selected_features}  # Initialize with zeros
         df = pd.DataFrame(data)

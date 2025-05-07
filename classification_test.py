@@ -22,15 +22,15 @@ with open('imputer.pkl', 'rb') as f:
     imputer = pickle.load(f)
 
 # Load selected features
-if os.path.exists('selected_features.txt'):
-    with open('selected_features.txt', 'r') as f:
-        selected_features = f.read().splitlines()
-    print("Loaded selected features from text file:", selected_features)
-else:
+# if os.path.exists('selected_features.txt'):
+#     with open('selected_features.txt', 'r') as f:
+#         selected_features = f.read().splitlines()
+#     print("Loaded selected features from text file:", selected_features)
+# else:
     # Fallback to pickle file for backward compatibility
-    with open('selected_features.pkl', 'rb') as f:
-        selected_features = pickle.load(f)
-    print("Loaded selected features from pickle file:", selected_features)
+with open('selected_features.pkl', 'rb') as f:
+    selected_features = pickle.load(f)
+print("Loaded selected features from pickle file:", selected_features)
 
 
 def predict_new_data(test_file):
