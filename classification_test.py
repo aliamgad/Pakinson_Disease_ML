@@ -19,7 +19,10 @@ with open('scaler.pkl', 'rb') as f:
     scaler = pickle.load(f)
 
 with open('imputer.pkl', 'rb') as f:
-    imputer = pickle.load(f)
+    imputer_data = pickle.load(f)
+
+imputers = imputer_data['imputers']
+numerical_cols = imputer_data['numerical_cols']
 
 # Load selected features
 if os.path.exists('selected_features.txt'):
@@ -56,9 +59,14 @@ def predict_new_data(test_file):
         X_new.loc[:, categorical_cols] = X_new[categorical_cols].fillna('missing')
         X_new.loc[:, categorical_cols] = ordinal_encoder.transform(X_new[categorical_cols])
 
-    numerical_cols = X_new.select_dtypes(include=['int64', 'float64']).columns
+    # numerical_cols = X_new.select_dtypes(include=['int64', 'float64']).columns
     if len(numerical_cols) > 0:
-        X_new.loc[:, numerical_cols] = imputer.transform(X_new[numerical_cols])
+        X_new_imputed = X_new.copy()
+        for col in numerical_cols:
+            if col in imputers:
+                X_new_imputed[[col]] = imputers[col].transform(X_new[[col]])
+
+        X_new.loc[:, numerical_cols] = X_new_imputed[numerical_cols]
         X_new[numerical_cols] = X_new[numerical_cols].astype('float64')
         X_new.loc[:, numerical_cols] = scaler.transform(X_new[numerical_cols])
 

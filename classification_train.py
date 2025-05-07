@@ -133,13 +133,30 @@ print("Saved scaler to scaler.pkl")
 # #     print("Loaded imputer from imputer.pkl")
 # # else:
 
-imputer = SimpleImputer(strategy='most_frequent')
-X_selected[numerical_cols] = imputer.fit_transform(X_selected[numerical_cols])
+SKEWNESS_THRESHOLD = .5
+imputers = {}
+imputed_values = {}
+X_imputed = X_selected.copy()
+for col in numerical_cols:
+    skewness = X_selected[col].skew(skipna=True)
+    if abs(skewness) > SKEWNESS_THRESHOLD:
+        strategy = 'median'  # Use median for skewed distributions
+    else:
+        strategy = 'mean'  # Use mean for symmetric distributions
 
-# Save for test script
+    imputer = SimpleImputer(strategy=strategy)
+    X_imputed[[col]] = imputer.fit_transform(X_selected[[col]])
+    imputers[col] = imputer
+    imputed_values[col] = imputer.statistics_[0]
+
+    print(f"Column '{col}': skewness={skewness:.2f}, using {strategy}")
+
+X_selected[numerical_cols] = X_imputed[numerical_cols]
+
+# Save imputers and imputed values for test script
 with open('imputer.pkl', 'wb') as f:
-    pickle.dump(imputer, f)
-print("Saved imputer to imputer.pkl")
+    pickle.dump({'imputers': imputers, 'imputed_values': imputed_values, 'numerical_cols': numerical_cols}, f)
+print("Saved imputers and imputed values to imputer.pkl")
 
 
 # Save for test script
