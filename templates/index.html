@@ -1,72 +1,185 @@
 <!DOCTYPE html>
-   <html lang="en">
-   <head>
-       <meta charset="UTF-8">
-       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-       <title>Parkinson's Disease Prediction</title>
-       <script src="https://cdn.tailwindcss.com"></script>
-       <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-   </head>
-   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-       <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
-           <h1 class="text-2xl font-bold mb-6 text-center">Parkinson's Disease Prediction</h1>
-           <form id="prediction-form" class="space-y-4">
-               {% for feature in features %}
-                   <div>
-                       <label class="block text-sm font-medium text-gray-700">{{ feature }}</label>
-                       {% if feature in numerical_cols %}
-                           <input type="number" step="any" name="{{ feature }}"
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                                  required>
-                       {% elif feature in categorical_cols %}
-                           <input type="text" name="{{ feature }}"
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                                  required>
-                       {% elif feature in binary_cols %}
-                           <input type="checkbox" name="{{ feature }}"
-                                  class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                       {% endif %}
-                   </div>
-               {% endfor %}
-               <button type="submit"
-                       class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                   Predict
-               </button>
-           </form>
-           <div id="result" class="mt-6 p-4 bg-gray-50 rounded-md hidden">
-               <h2 class="text-lg font-semibold">Prediction Result</h2>
-               <p id="prediction" class="mt-2"></p>
-               <p id="probability" class="mt-2"></p>
-           </div>
-       </div>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parkinson's Disease Prediction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
+        <h1 class="text-2xl font-bold mb-6 text-center">Parkinson's Disease Prediction</h1>
+        <form id="prediction-form" class="space-y-4">
+            <!-- Numerical Inputs -->
+            <h2 class="text-lg font-semibold mt-6">Basic Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Age</label>
+                    <input type="number" name="Age" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">BMI</label>
+                    <input type="number" step="0.1" name="BMI" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+            </div>
 
-       <script>
-           $(document).ready(function() {
-               $('#prediction-form').submit(function(e) {
-                   e.preventDefault();
-                   $.ajax({
-                       url: '/predict',
-                       type: 'POST',
-                       data: $(this).serialize(),
-                       success: function(response) {
-                           $('#result').removeClass('hidden');
-                           $('#prediction').text('Prediction: ' + response.prediction);
-                           if (response.probability) {
-                               $('#probability').text('Probabilities: Negative - ' +
-                                   (response.probability[0] * 100).toFixed(2) + '%, Positive - ' +
-                                   (response.probability[1] * 100).toFixed(2) + '%');
-                           } else {
-                               $('#probability').text('');
-                           }
-                       },
-                       error: function(response) {
-                           $('#result').removeClass('hidden');
-                           $('#prediction').text('Error: ' + response.responseJSON.error);
-                           $('#probability').text('');
-                       }
-                   });
-               });
-           });
-       </script>
-   </body>
-   </html>
+            <h2 class="text-lg font-semibold mt-6">Health Metrics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Systolic BP</label>
+                    <input type="number" name="SystolicBP" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Diastolic BP</label>
+                    <input type="number" name="DiastolicBP" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cholesterol Total</label>
+                    <input type="number" name="CholesterolTotal" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cholesterol LDL</label>
+                    <input type="number" name="CholesterolLDL" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cholesterol HDL</label>
+                    <input type="number" name="CholesterolHDL" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cholesterol Triglycerides</label>
+                    <input type="number" name="CholesterolTriglycerides" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+            </div>
+
+            <h2 class="text-lg font-semibold mt-6">Clinical Assessments</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">UPDRS Score</label>
+                    <input type="number" step="0.1" name="UPDRS" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">MoCA Score</label>
+                    <input type="number" step="0.1" name="MoCA" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Functional Assessment</label>
+                    <input type="number" step="0.1" name="FunctionalAssessment" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+            </div>
+
+            <h2 class="text-lg font-semibold mt-6">Lifestyle Factors</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Alcohol Consumption (drinks/week)</label>
+                    <input type="number" name="AlcoholConsumption" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Diet Quality (1-10)</label>
+                    <input type="number" min="1" max="10" name="DietQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Sleep Quality (1-10)</label>
+                    <input type="number" min="1" max="10" name="SleepQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Weekly Physical Activity (hr:min)</label>
+                    <input type="text" name="WeeklyPhysicalActivity (hr)" placeholder="HH:MM" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                </div>
+            </div>
+
+            <!-- Categorical Inputs -->
+            <h2 class="text-lg font-semibold mt-6">Demographic Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Gender</label>
+                    <select name="Gender" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                        <option value="">Select</option>
+                        <option value="0">Male</option>
+                        <option value="1">Female</option>
+                        <option value="2">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Ethnicity</label>
+                    <select name="Ethnicity" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                        <option value="">Select</option>
+                        <option value="0">Caucasian</option>
+                        <option value="1">African American</option>
+                        <option value="2">Asian</option>
+                        <option value="3">Hispanic</option>
+                        <option value="4">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Education Level</label>
+                    <select name="EducationLevel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                        <option value="">Select</option>
+                        <option value="0">Primary</option>
+                        <option value="1">Secondary</option>
+                        <option value="2">College</option>
+                        <option value="3">Postgraduate</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Smoking Status</label>
+                    <select name="Smoking" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
+                        <option value="">Select</option>
+                        <option value="0">No</option>
+                        <option value="1">Yes</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Symptoms Input -->
+            <h2 class="text-lg font-semibold mt-6">Symptoms</h2>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Symptoms (comma separated)</label>
+                <input type="text" name="Symptoms" placeholder="e.g., tremor, rigidity, bradykinesia" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <p class="mt-1 text-sm text-gray-500">Enter any symptoms separated by commas</p>
+            </div>
+
+            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 mt-6">
+                Predict Parkinson's Risk
+            </button>
+        </form>
+
+        <div id="result" class="mt-6 p-4 bg-gray-50 rounded-md hidden">
+            <h2 class="text-lg font-semibold">Prediction Result</h2>
+            <p id="prediction" class="mt-2 font-medium"></p>
+            <p id="probability" class="mt-2 text-sm"></p>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $('#prediction-form').submit(function(e) {
+                e.preventDefault();
+                $.ajax({
+                    url: '/predict',
+                    type: 'POST',
+                    data: $(this).serialize(),
+                    success: function(response) {
+                        $('#result').removeClass('hidden');
+                        $('#prediction').text('Prediction: ' + response.prediction);
+                        if (response.probability) {
+                            $('#probability').html(
+                                'Probability Breakdown:<br>' +
+                                'Negative: ' + (response.probability[0] * 100).toFixed(2) + '%<br>' +
+                                'Positive: ' + (response.probability[1] * 100).toFixed(2) + '%'
+                            );
+                        } else {
+                            $('#probability').text('');
+                        }
+                    },
+                    error: function(response) {
+                        $('#result').removeClass('hidden');
+                        $('#prediction').text('Error: ' + response.responseJSON.error);
+                        $('#probability').text('');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
