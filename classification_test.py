@@ -15,6 +15,10 @@ for name in ['LogisticRegression', 'RandomForestClassifier', 'SVC', 'Voting_Clas
         models[name] = pickle.load(f)
 
 # Load pre-trained preprocessing objects
+
+with open('ordinal_encoder.pkl', 'rb') as f:
+    ordinal_encoder = pickle.load(f)
+
 with open('scaler.pkl', 'rb') as f:
     scaler = pickle.load(f)
 
@@ -35,32 +39,52 @@ print("Loaded selected features from pickle file:", selected_features)
 
 def predict_new_data(test_file):
     test_data = pd.read_csv(test_file)
-    X_new = test_data.drop(columns=['Diagnosis', 'DoctorInCharge'])
-    y_new = test_data['Diagnosis']
 
-    # Handle nested data (MedicalHistory, Symptoms)
     def parse_nested(data, column):
+
         data[column] = data[column].apply(eval)  # Convert string to list
         return pd.get_dummies(data[column].explode()).groupby(level=0).sum()
 
-    X_new = pd.concat([X_new.drop(['MedicalHistory', 'Symptoms'], axis=1),
-                       parse_nested(X_new, 'MedicalHistory').add_prefix('MedHist_'),
-                       parse_nested(X_new, 'Symptoms').add_prefix('Symptom_')], axis=1)
+    test_data = pd.concat([test_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
+                   parse_nested(test_data, 'MedicalHistory').add_prefix('MedHist_'),
+                   parse_nested(test_data, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
-    X_new = X_new[selected_features]
+    x = test_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
+    y = test_data['Diagnosis']
 
-    categorical_cols = X_new.select_dtypes(include=['object']).columns
-    if len(categorical_cols) > 0:
-        with open('ordinal_encoder.pkl', 'rb') as f:
-            ordinal_encoder = pickle.load(f)
-        X_new.loc[:, categorical_cols] = X_new[categorical_cols].fillna('missing')
-        X_new.loc[:, categorical_cols] = ordinal_encoder.transform(X_new[categorical_cols])
+    # Handle nested data (MedicalHistory, Symptoms)
 
-    numerical_cols = X_new.select_dtypes(include=['int64', 'float64']).columns
-    if len(numerical_cols) > 0:
-        X_new.loc[:, numerical_cols] = imputer.transform(X_new[numerical_cols])
-        X_new[numerical_cols] = X_new[numerical_cols].astype('float64')
-        X_new.loc[:, numerical_cols] = scaler.transform(X_new[numerical_cols])
+    iter = ['MedHist_Depression', 'MedHist_Diabetes',
+            'MedHist_FamilyHistoryParkinsons', 'MedHist_Hypertension',
+            'MedHist_Stroke', 'MedHist_TraumaticBrainInjury',
+            'Symptom_Bradykinesia', 'Symptom_Constipation',
+            'Symptom_PosturalInstability', 'Symptom_Rigidity',
+            'Symptom_SleepDisorders', 'Symptom_SpeechProblems', 'Symptom_Tremor']
+
+    for col in iter:
+        x[col] = x[col].astype('object')  # Ensure float type for chi2
+
+    def hour_to_minutes(time):
+        hours, minutes = map(int, time.split(':'))
+        return hours + minutes / 60.0
+
+    x["WeeklyPhysicalActivity (hr)"] = x["WeeklyPhysicalActivity (hr)"].apply(hour_to_minutes)
+
+    numerical_cols = x.select_dtypes(include=['int64', 'float64']).columns
+    categorical_cols = x.select_dtypes(include=['object']).columns
+
+    # 1- Imputing
+    x[categorical_cols] = x[categorical_cols].fillna('missing')
+    x[numerical_cols] = imputer.transform(x[numerical_cols])
+
+    # 2- Encoding
+    x[categorical_cols] = ordinal_encoder.transform(x[categorical_cols])
+
+    # 3- Scaling
+    x[numerical_cols] = scaler.transform(x[numerical_cols])
+
+    # 4- Feature Selection
+    x = x[selected_features]
 
     # Make predictions and calculate detailed test metrics
     predictions = {}
@@ -70,12 +94,12 @@ def predict_new_data(test_file):
     class_reports = {}
     for name, model in models.items():
         start_time = time.time()
-        pred = model.predict(X_new)
+        pred = model.predict(x)
         test_times[name] = time.time() - start_time
         predictions[name] = pred
-        accuracies[name] = accuracy_score(y_new, pred)
-        conf_matrices[name] = confusion_matrix(y_new, pred)
-        class_reports[name] = classification_report(y_new, pred, output_dict=True)
+        accuracies[name] = accuracy_score(y, pred)
+        conf_matrices[name] = confusion_matrix(y, pred)
+        class_reports[name] = classification_report(y, pred, output_dict=True)
 
     return predictions, test_times, accuracies, conf_matrices, class_reports
 
