@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, json
 import pandas as pd
 import numpy as np
 import pickle
@@ -58,8 +58,8 @@ def load_feature_types():
             return pd.get_dummies(data[column].explode()).groupby(level=0).sum()
 
         train = pd.concat([train.drop(['MedicalHistory', 'Symptoms'], axis=1),
-                               parse_nested(train, 'MedicalHistory').add_prefix('MedHist_'),
-                               parse_nested(train, 'Symptoms').add_prefix('Symptom_')], axis=1)
+                           parse_nested(train, 'MedicalHistory').add_prefix('MedHist_'),
+                           parse_nested(train, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
         y = train['Diagnosis']
         x = train.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
@@ -102,13 +102,13 @@ def load_feature_types():
         raise Exception(f"Error processing feature types: {str(e)}")
 
 
-numerical_cols, categorical_cols = load_feature_types()
+numerical_cols0, categorical_cols0 = load_feature_types()
 
 
 @app.route('/')
 def index():
-    return render_template('index.html', features=selected_features, numerical_cols=numerical_cols,
-                           categorical_cols=categorical_cols)
+    return render_template('index.html', features=selected_features, numerical_cols=numerical_cols0,
+                           categorical_cols=categorical_cols0)
 
 
 @app.route('/predict', methods=['POST'])
@@ -116,20 +116,36 @@ def predict():
     try:
         # Get form data
         input_data = request.form.to_dict()
+
+        medical_history = json.loads(input_data.pop('MedicalHistory', '{}'))
+        symptoms = json.loads(input_data.pop('Symptoms', '{}'))
+
         input_data = pd.DataFrame([input_data])
 
-        print(input_data)
-        def parse_nested(data, column):
+        med_hist_df = pd.DataFrame([{
+            f'MedHist_{key}': 'Yes' if value == 'Yes' else 'No'
+            for key, value in medical_history.items()
+        }])
 
-            data[column] = data[column].apply(eval)  # Convert string to list
-            return pd.get_dummies(data[column].explode()).groupby(level=0).sum()
+        symptoms_df = pd.DataFrame([{
+            f'Symptom_{key}': 'Yes' if value == 'Yes' else 'No'
+            for key, value in symptoms.items()
+        }])
 
-        input_data = pd.concat([input_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
-                               parse_nested(input_data, 'MedicalHistory').add_prefix('MedHist_'),
-                               parse_nested(input_data, 'Symptoms').add_prefix('Symptom_')], axis=1)
+        input_data = pd.concat([input_data, med_hist_df, symptoms_df], axis=1)
 
-        x = input_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
-        y = input_data['Diagnosis']
+        expected_columns = list(numerical_cols0) + list(categorical_cols0)
+
+        # print("Expected columns:", expected_columns)
+
+        for col in expected_columns:
+            if col not in input_data.columns:
+                input_data[col] = 'No' if col.startswith('MedHist_') or col.startswith('Symptom_') else np.nan
+
+        # print(input_data)
+
+        x = input_data
+        # print(x)
 
         # Handle nested data (MedicalHistory, Symptoms)
 
@@ -141,7 +157,15 @@ def predict():
                 'Symptom_SleepDisorders', 'Symptom_SpeechProblems', 'Symptom_Tremor']
 
         for col in iter:
-            x[col] = x[col].astype('object')  # Ensure float type for chi2
+            x[col] = x[col].astype('object')
+
+        iter = ['Age', 'BMI', 'AlcoholConsumption', 'DietQuality', 'SleepQuality',
+                'SystolicBP', 'DiastolicBP', 'CholesterolTotal', 'CholesterolLDL',
+                'CholesterolHDL', 'CholesterolTriglycerides', 'UPDRS', 'MoCA',
+                'FunctionalAssessment']
+
+        for col in iter:
+            x[col] = pd.to_numeric(x[col], errors='coerce')
 
         def hour_to_minutes(time):
             hours, minutes = map(int, time.split(':'))
@@ -163,7 +187,7 @@ def predict():
         x[numerical_cols] = scaler.transform(x[numerical_cols])
 
         # 4- Feature Selection
-        print(selected_features)
+        # print(selected_features)
         x = x[selected_features]
         # Make prediction
         prediction = best_model.predict(x)[0]
