@@ -49,8 +49,8 @@ def predict_new_data(test_file):
                    parse_nested(test_data, 'MedicalHistory').add_prefix('MedHist_'),
                    parse_nested(test_data, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
-    x = test_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
     y = test_data['Diagnosis']
+    x = test_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
 
     # Handle nested data (MedicalHistory, Symptoms)
 

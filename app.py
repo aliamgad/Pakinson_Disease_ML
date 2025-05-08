@@ -50,36 +50,65 @@ best_model = models[best_model_name]
 # Define categorical and numerical columns from selected features
 def load_feature_types():
     try:
-        # Load train data to infer feature types
-        train_data = pd.read_csv('train.csv')
+        train = pd.read_csv('train.csv')
 
-        # Parse nested data as in training
         def parse_nested(data, column):
-            data[column] = data[column].apply(lambda x: eval(x) if pd.notnull(x) else [])
+
+            data[column] = data[column].apply(eval)  # Convert string to list
             return pd.get_dummies(data[column].explode()).groupby(level=0).sum()
 
-        train_data = pd.concat([
-            train_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
-            parse_nested(train_data, 'MedicalHistory').add_prefix('MedHist_'),
-            parse_nested(train_data, 'Symptoms').add_prefix('Symptom_')
-        ], axis=1)
+        train = pd.concat([train.drop(['MedicalHistory', 'Symptoms'], axis=1),
+                               parse_nested(train, 'MedicalHistory').add_prefix('MedHist_'),
+                               parse_nested(train, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
-        X = train_data.drop(columns=['Diagnosis', 'DoctorInCharge'])
-        numerical_cols = X[selected_features].select_dtypes(include=['int64', 'float64']).columns.tolist()
-        categorical_cols = X[selected_features].select_dtypes(include=['object']).columns.tolist()
-        binary_cols = [col for col in selected_features if col.startswith('MedHist_') or col.startswith('Symptom_')]
-        return numerical_cols, categorical_cols, binary_cols
+        y = train['Diagnosis']
+        x = train.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
+
+        # Handle nested data (MedicalHistory, Symptoms)
+
+        iter = ['MedHist_Depression', 'MedHist_Diabetes',
+                'MedHist_FamilyHistoryParkinsons', 'MedHist_Hypertension',
+                'MedHist_Stroke', 'MedHist_TraumaticBrainInjury',
+                'Symptom_Bradykinesia', 'Symptom_Constipation',
+                'Symptom_PosturalInstability', 'Symptom_Rigidity',
+                'Symptom_SleepDisorders', 'Symptom_SpeechProblems', 'Symptom_Tremor']
+
+        for col in iter:
+            x[col] = x[col].astype('object')  # Ensure float type for chi2
+
+        def hour_to_minutes(time):
+            hours, minutes = map(int, time.split(':'))
+            return hours + minutes / 60.0
+
+        x["WeeklyPhysicalActivity (hr)"] = x["WeeklyPhysicalActivity (hr)"].apply(hour_to_minutes)
+
+        numerical_cols = x.select_dtypes(include=['int64', 'float64']).columns
+        categorical_cols = x.select_dtypes(include=['object']).columns
+
+        # 1- Imputing
+        x[categorical_cols] = x[categorical_cols].fillna('missing')
+        x[numerical_cols] = imputer.transform(x[numerical_cols])
+
+        # 2- Encoding
+        x[categorical_cols] = ordinal_encoder.transform(x[categorical_cols])
+
+        # 3- Scaling
+        x[numerical_cols] = scaler.transform(x[numerical_cols])
+
+        # 4- Feature Selection
+        x = x[selected_features]
+        return numerical_cols, categorical_cols
     except Exception as e:
         raise Exception(f"Error processing feature types: {str(e)}")
 
 
-numerical_cols, categorical_cols, binary_cols = load_feature_types()
+numerical_cols, categorical_cols = load_feature_types()
 
 
 @app.route('/')
 def index():
     return render_template('index.html', features=selected_features, numerical_cols=numerical_cols,
-                           categorical_cols=categorical_cols, binary_cols=binary_cols)
+                           categorical_cols=categorical_cols)
 
 
 @app.route('/predict', methods=['POST'])
@@ -87,36 +116,58 @@ def predict():
     try:
         # Get form data
         input_data = request.form.to_dict()
+        input_data = pd.DataFrame([input_data])
 
         print(input_data)
+        def parse_nested(data, column):
+
+            data[column] = data[column].apply(eval)  # Convert string to list
+            return pd.get_dummies(data[column].explode()).groupby(level=0).sum()
+
+        input_data = pd.concat([input_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
+                               parse_nested(input_data, 'MedicalHistory').add_prefix('MedHist_'),
+                               parse_nested(input_data, 'Symptoms').add_prefix('Symptom_')], axis=1)
+
+        x = input_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
+        y = input_data['Diagnosis']
+
+        # Handle nested data (MedicalHistory, Symptoms)
+
+        iter = ['MedHist_Depression', 'MedHist_Diabetes',
+                'MedHist_FamilyHistoryParkinsons', 'MedHist_Hypertension',
+                'MedHist_Stroke', 'MedHist_TraumaticBrainInjury',
+                'Symptom_Bradykinesia', 'Symptom_Constipation',
+                'Symptom_PosturalInstability', 'Symptom_Rigidity',
+                'Symptom_SleepDisorders', 'Symptom_SpeechProblems', 'Symptom_Tremor']
+
+        for col in iter:
+            x[col] = x[col].astype('object')  # Ensure float type for chi2
+
+        def hour_to_minutes(time):
+            hours, minutes = map(int, time.split(':'))
+            return hours + minutes / 60.0
+
+        x["WeeklyPhysicalActivity (hr)"] = x["WeeklyPhysicalActivity (hr)"].apply(hour_to_minutes)
+
+        numerical_cols = x.select_dtypes(include=['int64', 'float64']).columns
+        categorical_cols = x.select_dtypes(include=['object']).columns
+
+        # 1- Imputing
+        x[categorical_cols] = x[categorical_cols].fillna('missing')
+        x[numerical_cols] = imputer.transform(x[numerical_cols])
+
+        # 2- Encoding
+        x[categorical_cols] = ordinal_encoder.transform(x[categorical_cols])
+
+        # 3- Scaling
+        x[numerical_cols] = scaler.transform(x[numerical_cols])
+
+        # 4- Feature Selection
         print(selected_features)
-
-        # Create a DataFrame with selected features
-        data = {feature: [0] for feature in selected_features}  # Initialize with zeros
-        df = pd.DataFrame(data)
-
-        # Fill in the input data
-        for feature, value in input_data.items():
-            if feature in selected_features:
-                if feature in numerical_cols:
-                    df[feature] = float(value)
-                elif feature in categorical_cols:
-                    df[feature] = value
-                elif feature in binary_cols:
-                    df[feature] = 1 if value.lower() == 'on' else 0
-
-        # Preprocess the input data
-        if categorical_cols:
-            df[categorical_cols] = df[categorical_cols].fillna('missing')
-            df[categorical_cols] = ordinal_encoder.transform(df[categorical_cols])
-
-        if numerical_cols:
-            df[numerical_cols] = imputer.transform(df[numerical_cols])
-            df[numerical_cols] = scaler.transform(df[numerical_cols])
-
+        x = x[selected_features]
         # Make prediction
-        prediction = best_model.predict(df)[0]
-        prediction_prob = best_model.predict_proba(df)[0] if hasattr(best_model, 'predict_proba') else None
+        prediction = best_model.predict(x)[0]
+        prediction_prob = best_model.predict_proba(x)[0] if hasattr(best_model, 'predict_proba') else None
 
         # Format response
         result = {

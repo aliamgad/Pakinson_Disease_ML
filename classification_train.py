@@ -45,8 +45,8 @@ train_data = pd.concat([train_data.drop(['MedicalHistory', 'Symptoms'], axis=1),
                         parse_nested(train_data, 'MedicalHistory').add_prefix('MedHist_'),
                         parse_nested(train_data, 'Symptoms').add_prefix('Symptom_')], axis=1)
 
-x = train_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
 y = train_data['Diagnosis']
+x = train_data.drop(columns=['Diagnosis', 'DoctorInCharge', 'PatientID'])
 
 # Feature Selection
 # Check if selected features file exists
