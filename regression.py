@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import pandas as pd
 import collections
@@ -13,7 +15,8 @@ import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LinearRegression
-
+import joblib
+from sklearn.pipeline import Pipeline
 data = pd.read_csv('parkinsons_disease_data_reg.csv')
 
 
@@ -297,3 +300,55 @@ print(f"Train R^2: {round(best_model['R2_train'], 4)}")
 print(f"Test R^2: {round(best_model['R2_test'], 4)}")
 
 # endregion
+
+# region Saving models
+
+
+#create pipelines for each model with their best configurations
+
+#Polynomial Regression Pipeline
+poly_reg_pipeline = Pipeline([
+    ('poly', PolynomialFeatures(degree = best_degree)),
+    ('model', linear_model.LinearRegression())
+])
+
+poly_reg_pipeline.fit(X_train, Y_train);
+joblib.dump(poly_reg_pipeline, 'polynomial_regression.pkl');
+
+#Ridge Regression Pipeline
+ridge_pipeline = Pipeline([
+    ('poly', PolynomialFeatures(degree = best_degree)),
+    ('model', linear_model.Ridge(alpha = best_alpha))
+])
+ridge_pipeline.fit(X_train, Y_train);
+
+with open('ridge_regression.pkl', 'wb') as f:
+    pickle.dump(ridge_pipeline, f)
+
+#Lasso Regression Pipeline
+lasso_pipeline = Pipeline([
+    ('poly', PolynomialFeatures(degree=best_degree)),
+    ('model', linear_model.Lasso(alpha=best_alpha))
+])
+lasso_pipeline.fit(X_train, Y_train)
+
+with open('lasso_regression.pkl', 'wb') as f:
+    pickle.dump(lasso_pipeline, f)
+
+#Saving artifacts for later use
+preprocessing_artifacts = {
+    'scaler': scaler,
+    'selected_features': list(top_feature),
+    'categorical_cols': list(categorical_cols),
+    'numerical_cols': list(Numerical_cols)
+}
+
+with open('preprocessing_artifacts.pkl', 'wb') as f:
+    pickle.dump(preprocessing_artifacts, f)
+
+print("All models saved:")
+print("- polynomial_regression.pkl")
+print("- ridge_regression.pkl")
+print("- lasso_regression.pkl")
+print("- preprocessing_artifacts.pkl (for data preprocessing)")
+# endregion  for
