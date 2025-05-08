@@ -15,7 +15,6 @@ import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LinearRegression
-import joblib
 from sklearn.pipeline import Pipeline
 data = pd.read_csv('parkinsons_disease_data_reg.csv')
 
@@ -313,7 +312,9 @@ poly_reg_pipeline = Pipeline([
 ])
 
 poly_reg_pipeline.fit(X_train, Y_train);
-joblib.dump(poly_reg_pipeline, 'polynomial_regression.pkl');
+
+with open('polynomial_regression.pkl', 'wb') as f:
+    pickle.dump(poly_reg_pipeline, f)
 
 #Ridge Regression Pipeline
 ridge_pipeline = Pipeline([
