@@ -292,7 +292,7 @@ model_configs = [
 
 
 for name, pipeline in model_configs:
-    pipeline.fit(X_train, Y_train)
+    pipeline.fit(X, Y)
     save_artifact(pipeline, f'{name}_model.pkl')
     
 preprocessing_artifacts = {

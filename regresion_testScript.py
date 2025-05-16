@@ -5,7 +5,7 @@ import ast
 from sklearn import metrics
 
 
-test_data = pd.read_csv('parkinsons_disease_data_reg_test.csv')  # Replace with your test file path
+test_data = pd.read_csv('parkinsons_disease_data_reg.csv')  # Replace with your test file path
 
 
 with open('preprocessing_artifacts.pkl', 'rb') as f:
